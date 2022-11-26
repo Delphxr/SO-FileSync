@@ -1,19 +1,14 @@
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "gui_drawer.h"
-#include "tree.h"
-
 #define BUFFER_SIZE 2000
-
-int actual_conections = 0;  // variable que cuenta el numero de clientes actuales, se utiliza en gui
-
+/*
 int get_file(int *sock, char *server_reply[BUFFER_SIZE], char *parameter[60]) {
     FILE *file;
     file = fopen(*parameter, "ab");
@@ -40,7 +35,8 @@ int get_file(int *sock, char *server_reply[BUFFER_SIZE], char *parameter[60]) {
 
     return 0;
 }
-
+*/
+/*
 // es un hilo creado por el listener thread, se encarga de atender a los clientes que se unan al servicio
 void *connection_handler(void *socket_desc) {
     // Get the socket descriptor
@@ -129,101 +125,172 @@ void *connection_handler(void *socket_desc) {
     return 0;
 }
 
-/* se encarga de escuchar como server, a ver si un cliente se une
-y crea un thread nuevo para dicho cliente tenga un servidor que lo atienda */
-void *listener_thread() {
-    int socket_desc, client_sock, c, *new_sock;
+*/
+
+int main(int argc, char *argv[]) {
+    int self_socket, client_socket;
     struct sockaddr_in server, client;
+    int read_size;
+    FILE *file;
 
-    // Create socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) {
-        printf(" No se pudo crear el socket\n");
-    }
+    // hay solo un argumento!! (recordar que arg[0] es el nombre del programa)
+    // ejecutar como servidor
+    if (argc == 2) {
+        printf("[+] Iniciando programa como servidor...\n");
 
-    // Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8888);
-    // Bind
-    if (bind(socket_desc, (struct sockaddr *)&server, sizeof(server)) < 0) {
-        // print the error message
-        perror(" Bind failed. Error");
-        exit(-1);
-        ;
-    }
+        char client_message[BUFFER_SIZE];
 
-    // Listen
-    listen(socket_desc, 3);
-    // Accept and incoming connection
-    // puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
-    // revisamos si hay conexiones
-    while ((client_sock = accept(socket_desc, (struct sockaddr *)&client,
-                                 (socklen_t *)&c))) {
-        puts("Connection accepted");
-        pthread_t connection_handler_thread;
-        new_sock = malloc(1);
-        *new_sock = client_sock;
-        if (pthread_create(&connection_handler_thread, NULL, connection_handler,
-                           (void *)new_sock) < 0) {
-            perror("could not create thread");
-            exit(-1);
-            ;
+        // Create socket
+        self_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (self_socket == -1) {
+            printf("Could not create socket");
         }
-        // Now join the thread , so that we dont terminate before the thread
-        // pthread_join( sniffer_thread , NULL);
-        actual_conections++;
-    }
-    if (client_sock < 0) {
-        perror("accept failed");
-        exit(-1);
-    }
-}
-
-// funcion generica para el manejo de los commandos más simples del servicio, envia un mensaje, recibe respuesta, imprime
-int command_manager(int *sock, char *server_reply[BUFFER_SIZE], char *input[60], char *parameter[60]) {
-    if (*sock != -1) {
-        // Send some data
-        if (send(*sock, *input, strlen(*input), 0) < 0) {
-            print_red("[!] Send failed");
-            getchar();
-            return -1;
-        }
-
-        memset(*server_reply, 0, sizeof(*server_reply));  // limapiamos el buffer
-
-        if (recv(*sock, *server_reply, BUFFER_SIZE, 0) < 0) {
-            puts("recv failed");
-            return -1;
-        }
-        clean_terminal();
-        print_line();
-        puts(*server_reply);
-        print_line();
-        print_yellow("Presione enter para continuar...");
-        return 0;
-    }
-    return -1;
-}
-
-// verifica si un comando forma parte de las funciones genericas
-int is_generic_funtion(char *target) {
-    char *arr[] = {"ls", "cd", "pwd"};
-    int len = 3;
-    int i;
-    for (i = 0; i < len; i++) {
-        if (strncmp(arr[i], target, strlen(target)) == 0) {
+        puts("Socket created");
+        // Prepare the sockaddr_in structure
+        server.sin_family = AF_INET;
+        server.sin_addr.s_addr = INADDR_ANY;
+        server.sin_port = htons(8889);
+        // Bind
+        if (bind(self_socket, (struct sockaddr *)&server, sizeof(server)) < 0) {
+            perror("bind failed. Error");
             return 1;
         }
-    }
-    return 0;
-}
+        puts("bind done");
+        // Listen
+        listen(self_socket, 3);
+        // Accept and incoming connection
+        puts("Waiting for incoming connections...");
 
-void main(int argc, char *argv[]) {
-    char input[60];      // input de comandos
-    char command[60];    // comando prncipal (open, close, cd, get, etc)
-    char parameter[60];  // parametros del commando (ip, archivo, etc)
+        int c = sizeof(struct sockaddr_in);
+        // accept connection from an incoming client
+        client_socket = accept(self_socket, (struct sockaddr *)&client, (socklen_t *)&c);
+        if (client_socket < 0) {
+            perror("accept failed");
+            return 1;
+        }
+        puts("Connection accepted");
+        // Receive a message from client
+        while ((read_size = recv(client_socket, client_message, BUFFER_SIZE, 0)) > 0) {
+            // Send the message back to client
+            /*send(client_socket, client_message, strlen(client_message), 0);
+            memset(client_message, 0, strlen(client_message));*/
+            file = fopen(client_message, "rb");
+            if (file == NULL) {
+                printf("Error opening file!\n");
+                continue;
+            }
+
+            printf("Iniciando envio del archivo... \n");
+
+            int sended_data;
+            int binary_data = fread(client_message, 1, sizeof(client_message), file);
+            while (1) {
+                sended_data = 0;
+                while (sended_data < binary_data) {
+                    int l = send(client_socket, client_message, strlen(client_message), 0);
+                    sended_data += l;
+                }
+                memset(client_message, 0, strlen(client_message));
+                if (feof(file)) break;
+                binary_data = fread(client_message, 1, sizeof(client_message), file);
+            }
+
+            printf("Archivo enviado! \n");
+        }
+        if (read_size == 0) {
+            puts("Client disconnected");
+            fflush(stdout);
+        } else if (read_size == -1) {
+            perror("recv failed");
+        }
+
+    }
+    // tenemos 2 argumentos (nombre del directorio local a sincronizar y el IP de la primer máquina)
+    // ejecutar como cliente
+    else if (argc == 3) {
+        printf("[+] Iniciando programa como cliente...\n");
+
+        char message[BUFFER_SIZE], server_reply[BUFFER_SIZE];
+
+        self_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (self_socket == -1) {
+            printf("Could not create socket");
+        }
+        puts("Socket created");
+        server.sin_addr.s_addr = inet_addr(argv[2]);
+        server.sin_family = AF_INET;
+        server.sin_port = htons(8889);
+        // Connect to remote server
+        if (connect(self_socket, (struct sockaddr *)&server, sizeof(server)) < 0) {
+            perror("connect failed. Error");
+            return 1;
+        }
+        puts("Connected\n");
+        // keep communicating with server
+        while (1) {
+            printf("Enter message : ");
+            scanf("%s", message);
+            // Send some data
+            if (send(self_socket, message, strlen(message), 0) < 0) {
+                puts("Send failed");
+                return 1;
+            }
+
+            // un select para verificar dato no quedarse esperando infinitamente
+            struct timeval tv;
+            fd_set readfds;
+            tv.tv_sec = 5;  // 5 segundos de timeout para respuesta
+            tv.tv_usec = 0;
+            FD_ZERO(&readfds);
+            FD_SET(self_socket, &readfds);
+            int n = self_socket + 1;
+
+            int bytes_read;
+            FILE *f = fopen("test.txt", "wb");  // archivo para meter lo que leamos, para facilitar la respuesta a pagina web
+            if (f == NULL) {
+                printf("Error opening file!\n");
+                exit(1);
+            }
+
+            do {
+                select(n, &readfds, NULL, NULL, &tv);
+
+                if (FD_ISSET(self_socket, &readfds)) {  // revisamos si llegaron datos, si si, los imprimimos/guardamos
+                    bytes_read = recv(self_socket, server_reply, BUFFER_SIZE, 0);
+                    if (bytes_read == -1) {
+                        perror("recv");
+                        exit(1);
+                    } else {
+                        //fprintf(f, "%.*s", bytes_read, buf);
+                        fwrite(server_reply, 1, BUFFER_SIZE, f);
+                        memset(server_reply, 0, strlen(server_reply));
+                    }
+                } else  // pasaron 5 segundos y no ha llegado ningun otro stream de datos
+                    break;
+
+            } while (bytes_read > 0);
+
+            fclose(f);
+            // Receive a reply from the server
+            /*if (recv(self_socket, server_reply, BUFFER_SIZE, 0) < 0) {
+                puts("recv failed");
+                break;
+            }
+            printf("Server reply : %s \n", server_reply);
+
+            memset(server_reply, 0, strlen(server_reply));*/
+        }
+        close(self_socket);
+
+    }
+    // manejo de errores
+    else if (argc < 2) {
+        printf("[!] ERROR: Debe ingresar al menos un argumento! \n");
+    } else {
+        printf("[!] ERROR: Cantidad de argumentos no valida! \n");
+    }
+
+    /*
 
     // creamos el thread listener (server)
     pthread_t listener;
@@ -268,9 +335,7 @@ void main(int argc, char *argv[]) {
             if (sock != -1) {
                 close(sock);
             }
-        } else if (strcmp(command, "quit") == 0) {
-            return;
-            exit(0);
+
         } else if (strcmp(command, "get") == 0) {
             if (sock != -1) {
                 // Send some data
@@ -287,15 +352,7 @@ void main(int argc, char *argv[]) {
                 char *par_ptr = parameter;
                 get_file(&sock, &reply_ptr, &par_ptr);
             }
-        } else if (strcmp(command, "lcd") == 0) {
-            chdir(parameter);
-            char pwd[100];
 
-            clean_terminal();
-            print_line();
-            puts(getcwd(pwd, 100));
-            print_line();
-            print_yellow("Presione enter para continuar...");
         } else if (strcmp(command, "put") == 0) {
             // Send some data
             if (send(sock, input, strlen(input), 0) < 0) {
@@ -332,11 +389,7 @@ void main(int argc, char *argv[]) {
             printf("Archivo enviado! \n");
 
             fclose(file);
-        } else if (is_generic_funtion(command)) {  // se encarga de mann el ls, cd, pwd
-            char *reply_ptr = server_reply;
-            char *input_ptr = input;
-            char *par_ptr = parameter;
-            command_manager(&sock, &reply_ptr, &input_ptr, &par_ptr);
+
         } else {
             print_red("[!] Comando Desconocido!\n");
         }
@@ -344,5 +397,5 @@ void main(int argc, char *argv[]) {
         memset(server_reply, 0, sizeof(server_reply));  // limapiamos el buffer
         memset(command, 0, sizeof(command));
         memset(parameter, 0, sizeof(parameter));
-    }
+    }*/
 }
