@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "compare.h"
+
 #define BUFFER_SIZE 2000
 
 // envia un archivo, recibe el socket al que enviar, un buffer, y el archivo abierto
@@ -29,12 +31,12 @@ int send_file(int *destination_socket, char *message_buffer[BUFFER_SIZE], FILE *
     printf("Archivo enviado! \n");
 }
 
-//recibimos un archivo, recibe el socket propio, nombre de archivo como lo vamos a guardar, y un buffer
+// recibimos un archivo, recibe el socket propio, nombre de archivo como lo vamos a guardar, y un buffer
 int get_file(int *self_socket, char file_name[], char *message_buffer[BUFFER_SIZE]) {
     // un select para verificar dato no quedarse esperando infinitamente
     struct timeval tv;
     fd_set readfds;
-    tv.tv_sec = 5;  // 5 segundos de timeout para respuesta
+    tv.tv_sec = 2;  // 2 segundos de timeout para respuesta
     tv.tv_usec = 0;
     FD_ZERO(&readfds);
     FD_SET(*self_socket, &readfds);
@@ -114,18 +116,42 @@ int main(int argc, char *argv[]) {
         puts("Connection accepted");
         // Receive a message from client
         memset(client_message, 0, BUFFER_SIZE);
+        char command[60];    // comando prncipal (open, close, cd, get, etc)
+        char parameter[60];  // parametros del commando (ip, archivo, etc)
         while ((read_size = recv(client_socket, client_message, BUFFER_SIZE, 0)) > 0) {
-            file = fopen(client_message, "rb");
+            sscanf(client_message, "%s %s", command, parameter);
+            char path_to_file[256];
+            strcpy(path_to_file, argv[1]);
+            strcat(path_to_file, "/");
+            strcat(path_to_file, parameter);
 
-            if (file == NULL) {
-                printf("Error opening file %s!\n", client_message);
-                continue;
+            // enviar un archivo
+            if (strcmp(command, "get") == 0) {
+                file = fopen(path_to_file, "rb");
+
+                if (file == NULL) {
+                    printf("Error opening file %s!\n", client_message);
+                    continue;
+                }
+
+                printf("Iniciando envio del archivo... \n");
+
+                char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
+                send_file(&client_socket, &message_buffer_ptr, &file);
+
+            }  // recibir un archivo
+            else if (strcmp(command, "put") == 0) {
+                char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
+                get_file(&self_socket, parameter, &message_buffer_ptr);
+
+            }  // eliminar un archivo
+            else if (strcmp(command, "delete") == 0) {
+                if (remove(path_to_file) == 0) {
+                    printf("Archivo eliminado correctamente");
+                } else {
+                    printf("Hubo un error al eliminar %s", path_to_file);
+                }
             }
-
-            printf("Iniciando envio del archivo... \n");
-
-            char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
-            send_file(&client_socket, &message_buffer_ptr, &file);
         }
         if (read_size == 0) {
             puts("Client disconnected");
@@ -158,11 +184,89 @@ int main(int argc, char *argv[]) {
         puts("Connected\n");
         // keep communicating with server
         while (1) {
-            printf("Enter message : ");
 
-            scanf("%s", message);
+            // pseudo codigo para comparaciones
+
+            /*
+            // ****************************
+            // pedimos el grafo de archivos
+            // ****************************
+
+            memset(message, 0, BUFFER_SIZE);
+            strcat(message, "grafo .");
+            if (send(self_socket, message, strlen(message), 0) < 0) {
+                puts("Send failed");
+                return 1;
+            }
+            if (recv(self_socket, server_reply, BUFFER_SIZE, 0) < 0) {
+                puts("recv failed");
+                break;
+            }
+            char *grafo_remoto = server_reply;
+
+            // ****************************
+            // mandamos el grafo a comparar
+            // ****************************
+            char nuevos[BUFFER_SIZE] = compare_new(grafo_remoto);
+            char eliminados[BUFFER_SIZE] = compare_removed(grafo_remoto);
+            char cambios[BUFFER_SIZE] = compare(grafo_remoto); //debe de tener los que son diferentes, dejar solo el de fecha mas nueva
+            char cambios_locales[BUFFER_SIZE] = compare_local();
+
+            // ****************************
+            // hacemos operaciones
+            // ****************************
+
+            char lugar[60];    // comando prncipal (open, close, cd, get, etc)
+            char nombre[60];  // parametros del commando (ip, archivo, etc)
+            int tammanno;    // comando prncipal (open, close, cd, get, etc)
+            int fecha;  // parametros del commando (ip, archivo, etc)
+
+            //iteramos por los nodos de nuevos {
+                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
+
+                if (strcmp(lugar, "local" !- 0)){
+                    send_file(nombre);
+                }
+                else{
+                    get_file(nombre);
+                }
+            }
+
+            //iteramos por los nodos de delete {
+                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
+                if (strcmp(lugar, "local" !- 0)){
+                    delete_remote(nombre);
+                }
+                else{
+                    delete(nombre);
+                }
+            }
+
+            //iteramos por los nodos de diferente {
+                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
+                if (strcmp(lugar, "local" !- 0)){
+                    if (//verificar si nombre tambien está en la lista de cambios locales){
+                        send_file_diferente(nombre)
+                    } else{
+                        send_file(nombre);
+                    }
+                }
+                else{
+                    if (//verificar si nombre tambien está en la lista de cambios locales){
+                        get_file_diferente(nombre)
+                    } else{
+                        get_file(nombre);
+                    }
+                }
+            }
+
+            */
+            getchar();
+            memset(message, 0, BUFFER_SIZE);
+            strcpy(message, "get cuento.txt");
             printf("input es: %s\n", message);
-            // Send some data
+
+            // mandamos el nombre de archivo or recibir
             if (send(self_socket, message, strlen(message), 0) < 0) {
                 puts("Send failed");
                 return 1;
@@ -178,6 +282,7 @@ int main(int argc, char *argv[]) {
     else if (argc < 2) {
         printf("[!] ERROR: Debe ingresar al menos un argumento! \n");
     } else {
+        compare();
         printf("[!] ERROR: Cantidad de argumentos no valida! \n");
     }
 }
