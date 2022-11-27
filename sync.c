@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
             while (1) {
                 sended_data = 0;
                 while (sended_data < binary_data) {
-                    int l = send(client_socket, client_message, strlen(client_message), 0);
+                    int l = send(client_socket, client_message, binary_data, 0);
                     sended_data += l;
                 }
                 memset(client_message, 0, BUFFER_SIZE);
