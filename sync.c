@@ -21,6 +21,11 @@ int send_file(int *destination_socket, char *message_buffer[BUFFER_SIZE], FILE *
         sended_data = 0;
         while (sended_data < binary_data) {
             int l = send(*destination_socket, *message_buffer, binary_data, 0);
+            if (l < 0){
+                puts("Send failed");
+                return 1;
+            }
+            printf("%d",l);
             sended_data += l;
         }
         memset(*message_buffer, 0, BUFFER_SIZE);
@@ -31,7 +36,7 @@ int send_file(int *destination_socket, char *message_buffer[BUFFER_SIZE], FILE *
     printf("Archivo enviado! \n");
 }
 
-// recibimos un archivo, recibe el socket propio, nombre de archivo como lo vamos a guardar, y un buffer
+// recibimos un archivo, recibe el socket del que vamos a recibir, nombre de archivo como lo vamos a guardar, y un buffer
 int get_file(int *self_socket, char file_name[], char *message_buffer[BUFFER_SIZE]) {
     // un select para verificar dato no quedarse esperando infinitamente
     struct timeval tv;
@@ -141,8 +146,9 @@ int main(int argc, char *argv[]) {
 
             }  // recibir un archivo
             else if (strcmp(command, "put") == 0) {
+                printf("Recibiendo archivo... \n");
                 char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
-                get_file(&self_socket, parameter, &message_buffer_ptr);
+                get_file(&client_socket, parameter, &message_buffer_ptr);
 
             }  // eliminar un archivo
             else if (strcmp(command, "delete") == 0) {
@@ -152,6 +158,7 @@ int main(int argc, char *argv[]) {
                     printf("Hubo un error al eliminar %s", path_to_file);
                 }
             }
+            printf("\n");
         }
         if (read_size == 0) {
             puts("Client disconnected");
@@ -168,8 +175,8 @@ int main(int argc, char *argv[]) {
 
         char message[BUFFER_SIZE], server_reply[BUFFER_SIZE];
 
-        self_socket = socket(AF_INET, SOCK_STREAM, 0);
-        if (self_socket == -1) {
+        client_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (client_socket == -1) {
             printf("Could not create socket");
         }
         puts("Socket created");
@@ -177,14 +184,13 @@ int main(int argc, char *argv[]) {
         server.sin_family = AF_INET;
         server.sin_port = htons(8889);
         // Connect to remote server
-        if (connect(self_socket, (struct sockaddr *)&server, sizeof(server)) < 0) {
+        if (connect(client_socket, (struct sockaddr *)&server, sizeof(server)) < 0) {
             perror("connect failed. Error");
             return 1;
         }
         puts("Connected\n");
         // keep communicating with server
         while (1) {
-
             // pseudo codigo para comparaciones
 
             /*
@@ -263,17 +269,40 @@ int main(int argc, char *argv[]) {
             */
             getchar();
             memset(message, 0, BUFFER_SIZE);
-            strcpy(message, "get cuento.txt");
-            printf("input es: %s\n", message);
+            strcpy(message, "put test_put.txt");  // esto hay que cambiarlo para que sea dinamico
+
+            
 
             // mandamos el nombre de archivo or recibir
-            if (send(self_socket, message, strlen(message), 0) < 0) {
+            if (send(client_socket, message, strlen(message), 0) < 0) {
                 puts("Send failed");
                 return 1;
             }
 
-            char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
-            get_file(&self_socket, "test.txt", &message_buffer_ptr);
+            sleep(1);
+
+            //////////////////////////////////////////
+            char path_to_file[256];
+            strcpy(path_to_file, argv[1]);
+            strcat(path_to_file, "/");
+            strcat(path_to_file, "cuento.txt");
+            file = fopen(path_to_file, "rb");
+
+            if (file == NULL) {
+                printf("Error opening file %s!\n", path_to_file);
+                continue;
+            }
+
+            printf("Iniciando envio del archivo... \n");
+
+            memset(message, 0, BUFFER_SIZE);
+            char *message_buffer_ptr = message;  // adapta el string a un puntero para poderlo pasar por referencia
+            send_file(&client_socket, &message_buffer_ptr, &file);
+            fclose(file);
+            //////////////////////
+
+            //char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
+            //get_file(&client_socket, "test.txt", &message_buffer_ptr);
         }
         close(self_socket);
 
