@@ -11,6 +11,65 @@
 
 #define BUFFER_SIZE 2000
 
+// envia un archivo, recibe el socket al que enviar, un buffer, y el archivo abierto
+int send_file(int *destination_socket, char *message_buffer[BUFFER_SIZE], FILE **file) {
+    int sended_data;
+    int binary_data = fread(*message_buffer, 1, sizeof(*message_buffer), *file);
+    while (1) {
+        sended_data = 0;
+        while (sended_data < binary_data) {
+            int l = send(*destination_socket, *message_buffer, binary_data, 0);
+            sended_data += l;
+        }
+        memset(*message_buffer, 0, BUFFER_SIZE);
+        if (feof(*file)) break;
+        binary_data = fread(*message_buffer, 1, sizeof(*message_buffer), *file);
+    }
+
+    printf("Archivo enviado! \n");
+}
+
+//recibimos un archivo, recibe el socket propio, nombre de archivo como lo vamos a guardar, y un buffer
+int get_file(int *self_socket, char file_name[], char *message_buffer[BUFFER_SIZE]) {
+    // un select para verificar dato no quedarse esperando infinitamente
+    struct timeval tv;
+    fd_set readfds;
+    tv.tv_sec = 5;  // 5 segundos de timeout para respuesta
+    tv.tv_usec = 0;
+    FD_ZERO(&readfds);
+    FD_SET(*self_socket, &readfds);
+    int n = *self_socket + 1;
+
+    int bytes_read;
+
+    FILE *f = fopen(file_name, "wb");  // archivo para meter lo que leamos
+    if (f == NULL) {
+        printf("Error opening file!\n");
+        exit(1);
+    }
+
+    do {
+        select(n, &readfds, NULL, NULL, &tv);
+
+        if (FD_ISSET(*self_socket, &readfds)) {  // revisamos si llegaron datos, si si, los imprimimos/guardamos
+            bytes_read = recv(*self_socket, *message_buffer, BUFFER_SIZE, 0);
+            if (bytes_read == -1) {
+                perror("recv");
+                exit(1);
+            } else {
+                fwrite(*message_buffer, 1, strlen(*message_buffer), f);
+                memset(*message_buffer, 0, strlen(*message_buffer));
+            }
+        } else {
+            printf("Tiempo de espera terminado!\n");
+            break;
+        }  // pasaron 5 segundos y no ha llegado ningun otro stream de datos
+
+    } while (bytes_read > 0);
+
+    fclose(f);
+}
+
 int main(int argc, char *argv[]) {
     int self_socket, client_socket;
     struct sockaddr_in server, client;
@@ -65,20 +124,8 @@ int main(int argc, char *argv[]) {
 
             printf("Iniciando envio del archivo... \n");
 
-            int sended_data;
-            int binary_data = fread(client_message, 1, sizeof(client_message), file);
-            while (1) {
-                sended_data = 0;
-                while (sended_data < binary_data) {
-                    int l = send(client_socket, client_message, binary_data, 0);
-                    sended_data += l;
-                }
-                memset(client_message, 0, BUFFER_SIZE);
-                if (feof(file)) break;
-                binary_data = fread(client_message, 1, sizeof(client_message), file);
-            }
-
-            printf("Archivo enviado! \n");
+            char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
+            send_file(&client_socket, &message_buffer_ptr, &file);
         }
         if (read_size == 0) {
             puts("Client disconnected");
@@ -121,43 +168,8 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
 
-            // un select para verificar dato no quedarse esperando infinitamente
-            struct timeval tv;
-            fd_set readfds;
-            tv.tv_sec = 5;  // 5 segundos de timeout para respuesta
-            tv.tv_usec = 0;
-            FD_ZERO(&readfds);
-            FD_SET(self_socket, &readfds);
-            int n = self_socket + 1;
-
-            int bytes_read;
-
-            FILE *f = fopen("test.txt", "wb");  // archivo para meter lo que leamos, para facilitar la respuesta a pagina web
-            if (f == NULL) {
-                printf("Error opening file!\n");
-                exit(1);
-            }
-
-            do {
-                select(n, &readfds, NULL, NULL, &tv);
-
-                if (FD_ISSET(self_socket, &readfds)) {  // revisamos si llegaron datos, si si, los imprimimos/guardamos
-                    bytes_read = recv(self_socket, server_reply, BUFFER_SIZE, 0);
-                    if (bytes_read == -1) {
-                        perror("recv");
-                        exit(1);
-                    } else {
-                        fwrite(server_reply, 1, strlen(server_reply), f);
-                        memset(server_reply, 0, strlen(server_reply));
-                    }
-                } else {
-                    printf("Tiempo de espera terminado!\n");
-                    break;
-                }  // pasaron 5 segundos y no ha llegado ningun otro stream de datos
-
-            } while (bytes_read > 0);
-
-            fclose(f);
+            char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
+            get_file(&self_socket, "test.txt", &message_buffer_ptr);
         }
         close(self_socket);
 
