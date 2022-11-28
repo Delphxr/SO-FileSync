@@ -328,7 +328,7 @@ void compare_remoto(char* changes, char* remoto, char* path) {
     } else {
         memset(grafo, 0, sizeof(grafo));
         magic(0, path, grafo, 1);
-        compareByNOdes(remoto, grafo, 0, changes);
+        compareByNOdes(remoto, grafo, 1, changes);
         memset(grafo, 0, sizeof(grafo));
         magic(0, path, grafo, 1);
         compareByNOdes(grafo, remoto, 1, changes);

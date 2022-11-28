@@ -241,7 +241,7 @@ int main(int argc, char *argv[]) {
             while ((token = strtok_r(rest, "\n", &rest))) {
                 sscanf(token, "%s %s %s %s", operacion, lugar, nombre, size);
 
-                if (strcmp(operacion, "Agregado") == 0) {
+                if (strcmp(operacion, "Agregado") == 0 || strcmp(operacion, "Modificado") == 0) {
                     printf("operacion de agregado de %s...\n", nombre);
                     if (strcmp(lugar, "remote") == 0) {
                         memset(message, 0, BUFFER_SIZE);
@@ -255,8 +255,13 @@ int main(int argc, char *argv[]) {
                         }
 
                         sleep(1);
+                        char path_to_file[256];
+                        strcpy(path_to_file, argv[1]);
+                        strcat(path_to_file, "/");
+                        strcat(path_to_file, nombre);
+
                         char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
-                        get_file(&client_socket, nombre, &message_buffer_ptr);
+                        get_file(&client_socket, path_to_file, &message_buffer_ptr);
                     } else {
                         memset(message, 0, BUFFER_SIZE);
                         strcpy(message, "put ");
@@ -294,88 +299,7 @@ int main(int argc, char *argv[]) {
                 sleep(2.5);
             }
             break;
-            // pseudo codigo para comparaciones
 
-            /*
-            // ****************************
-            // pedimos el grafo de archivos
-            // ****************************
-
-            memset(message, 0, BUFFER_SIZE);
-            strcat(message, "grafo .");
-            if (send(self_socket, message, strlen(message), 0) < 0) {
-                puts("Send failed");
-                return 1;
-            }
-            if (recv(self_socket, server_reply, BUFFER_SIZE, 0) < 0) {
-                puts("recv failed");
-                break;
-            }
-            char *grafo_remoto = server_reply;
-
-            // ****************************
-            // mandamos el grafo a comparar
-            // ****************************
-            char nuevos[BUFFER_SIZE] = compare_new(grafo_remoto);
-            char eliminados[BUFFER_SIZE] = compare_removed(grafo_remoto);
-            char cambios[BUFFER_SIZE] = compare(grafo_remoto); //debe de tener los que son diferentes, dejar solo el de fecha mas nueva
-            char cambios_locales[BUFFER_SIZE] = compare_local();
-
-            // ****************************
-            // hacemos operaciones
-            // ****************************
-
-            char lugar[60];    // comando prncipal (open, close, cd, get, etc)
-            char nombre[60];  // parametros del commando (ip, archivo, etc)
-            int tammanno;    // comando prncipal (open, close, cd, get, etc)
-            int fecha;  // parametros del commando (ip, archivo, etc)
-
-            //iteramos por los nodos de nuevos {
-                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
-
-                if (strcmp(lugar, "local" !- 0)){
-                    send_file(nombre);
-                }
-                else{
-                    get_file(nombre);
-                }
-            }
-
-            //iteramos por los nodos de delete {
-                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
-                if (strcmp(lugar, "local" !- 0)){
-                    delete_remote(nombre);
-                }
-                else{
-                    delete(nombre);
-                }
-            }
-
-            //iteramos por los nodos de diferente {
-                sscanf(nuevo, "%s %s %d %d", lugar, nombre, tamanno, fecha);
-                if (strcmp(lugar, "local" !- 0)){
-                    if (//verificar si nombre tambien está en la lista de cambios locales){
-                        send_file_diferente(nombre)
-                    } else{
-                        send_file(nombre);
-                    }
-                }
-                else{
-                    if (//verificar si nombre tambien está en la lista de cambios locales){
-                        get_file_diferente(nombre)
-                    } else{
-                        get_file(nombre);
-                    }
-                }
-            }
-
-            */
-            getchar();
-
-            //////////////////////
-
-            // char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
-            // get_file(&client_socket, "test.txt", &message_buffer_ptr);
         }
         close(self_socket);
     }
