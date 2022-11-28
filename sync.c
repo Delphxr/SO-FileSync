@@ -311,7 +311,10 @@ int main(int argc, char *argv[]) {
     else if (argc < 2) {
         printf("[!] ERROR: Debe ingresar al menos un argumento! \n");
     } else {
-        compare();
+        char changes[4096];
+        memset(changes, 0, sizeof(changes));
+        compare(changes);
+        //printf("%s \n", changes);
         printf("[!] ERROR: Cantidad de argumentos no valida! \n");
     }
 }
