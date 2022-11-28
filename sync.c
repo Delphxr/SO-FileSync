@@ -21,11 +21,11 @@ int send_file(int *destination_socket, char *message_buffer[BUFFER_SIZE], FILE *
         sended_data = 0;
         while (sended_data < binary_data) {
             int l = send(*destination_socket, *message_buffer, binary_data, 0);
-            if (l < 0){
+            if (l < 0) {
                 puts("Send failed");
                 return 1;
             }
-            printf("%d",l);
+            //printf("%d", l);
             sended_data += l;
         }
         memset(*message_buffer, 0, BUFFER_SIZE);
@@ -130,6 +130,8 @@ int main(int argc, char *argv[]) {
             strcat(path_to_file, "/");
             strcat(path_to_file, parameter);
 
+            puts(client_message);
+
             // enviar un archivo
             if (strcmp(command, "get") == 0) {
                 file = fopen(path_to_file, "rb");
@@ -148,7 +150,7 @@ int main(int argc, char *argv[]) {
             else if (strcmp(command, "put") == 0) {
                 printf("Recibiendo archivo... \n");
                 char *message_buffer_ptr = client_message;  // adapta el string a un puntero para poderlo pasar por referencia
-                get_file(&client_socket, parameter, &message_buffer_ptr);
+                get_file(&client_socket, path_to_file, &message_buffer_ptr);
 
             }  // eliminar un archivo
             else if (strcmp(command, "delete") == 0) {
@@ -157,6 +159,12 @@ int main(int argc, char *argv[]) {
                 } else {
                     printf("Hubo un error al eliminar %s", path_to_file);
                 }
+            } else if (strcmp(command, "grafo") == 0) {
+                printf("Enviando grafo... \n");
+                char changes[2000];
+                memset(changes, 0, sizeof(changes));
+                get_remote(changes, argv[1]);
+                send(client_socket, changes, strlen(changes), 0);
             }
             printf("\n");
         }
@@ -191,6 +199,101 @@ int main(int argc, char *argv[]) {
         puts("Connected\n");
         // keep communicating with server
         while (1) {
+            // ****************************
+            // pedimos el grafo de archivos
+            // ****************************
+
+            memset(message, 0, BUFFER_SIZE);
+            strcat(message, "grafo .");
+            if (send(client_socket, message, strlen(message), 0) < 0) {
+                puts("Send failed");
+                return 1;
+            }
+            if (recv(client_socket, server_reply, BUFFER_SIZE, 0) < 0) {
+                puts("recv failed");
+                break;
+            }
+
+            char grafo_remoto[2000];
+            strcpy(grafo_remoto, server_reply);
+
+            // ****************************
+            // mandamos el grafo a comparar
+            // ****************************
+            printf("grafo remoto: \n%s\n\n", grafo_remoto);
+            char diferencias[4096];
+            compare_remoto(diferencias, grafo_remoto, argv[1]);
+            printf("\n Diferencias:\n%s\n---\n", diferencias);
+
+            // ****************************
+            // hacemos operaciones
+            // ****************************
+
+            // loop through the string to extract all other tokens
+            char *token;
+            char *rest = diferencias;
+
+            char operacion[24];
+            char lugar[24];
+            char nombre[128];
+            char size[24];
+            sleep(1);
+            while ((token = strtok_r(rest, "\n", &rest))) {
+                sscanf(token, "%s %s %s %s", operacion, lugar, nombre, size);
+
+                if (strcmp(operacion, "Agregado") == 0) {
+                    printf("operacion de agregado de %s...\n", nombre);
+                    if (strcmp(lugar, "remote") == 0) {
+                        memset(message, 0, BUFFER_SIZE);
+                        strcpy(message, "get ");
+                        strcat(message, nombre);
+
+                        // mandamos el nombre de archivo or recibir
+                        if (send(client_socket, message, strlen(message), 0) < 0) {
+                            puts("Send failed");
+                            return 1;
+                        }
+
+                        sleep(1);
+                        char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
+                        get_file(&client_socket, nombre, &message_buffer_ptr);
+                    } else {
+                        memset(message, 0, BUFFER_SIZE);
+                        strcpy(message, "put ");
+                        strcat(message, nombre);
+
+                        // mandamos el nombre de archivo or recibir
+                        if (send(client_socket, message, strlen(message), 0) < 0) {
+                            puts("Send failed");
+                            return 1;
+                        }
+
+                        sleep(1);
+
+                        //////////////////////////////////////////
+                        char path_to_file[256];
+                        strcpy(path_to_file, argv[1]);
+                        strcat(path_to_file, "/");
+                        strcat(path_to_file, nombre);
+                        file = fopen(path_to_file, "rb");
+
+                        if (file == NULL) {
+                            printf("Error opening file %s!\n", path_to_file);
+                            continue;
+                        }
+
+                        printf("Iniciando envio del archivo... \n");
+
+                        memset(message, 0, BUFFER_SIZE);
+                        char *message_buffer_ptr = message;  // adapta el string a un puntero para poderlo pasar por referencia
+                        send_file(&client_socket, &message_buffer_ptr, &file);
+                        fclose(file);
+                    }
+                }
+
+                sleep(2.5);
+            }
+            break;
             // pseudo codigo para comparaciones
 
             /*
@@ -268,44 +371,13 @@ int main(int argc, char *argv[]) {
 
             */
             getchar();
-            memset(message, 0, BUFFER_SIZE);
-            strcpy(message, "put test_put.txt");  // esto hay que cambiarlo para que sea dinamico
 
-            
-
-            // mandamos el nombre de archivo or recibir
-            if (send(client_socket, message, strlen(message), 0) < 0) {
-                puts("Send failed");
-                return 1;
-            }
-
-            sleep(1);
-
-            //////////////////////////////////////////
-            char path_to_file[256];
-            strcpy(path_to_file, argv[1]);
-            strcat(path_to_file, "/");
-            strcat(path_to_file, "cuento.txt");
-            file = fopen(path_to_file, "rb");
-
-            if (file == NULL) {
-                printf("Error opening file %s!\n", path_to_file);
-                continue;
-            }
-
-            printf("Iniciando envio del archivo... \n");
-
-            memset(message, 0, BUFFER_SIZE);
-            char *message_buffer_ptr = message;  // adapta el string a un puntero para poderlo pasar por referencia
-            send_file(&client_socket, &message_buffer_ptr, &file);
-            fclose(file);
             //////////////////////
 
-            //char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
-            //get_file(&client_socket, "test.txt", &message_buffer_ptr);
+            // char *message_buffer_ptr = server_reply;  // adapta el string a un puntero para poderlo pasar por referencia
+            // get_file(&client_socket, "test.txt", &message_buffer_ptr);
         }
         close(self_socket);
-
     }
     // manejo de errores
     else if (argc < 2) {
@@ -313,8 +385,8 @@ int main(int argc, char *argv[]) {
     } else {
         char changes[4096];
         memset(changes, 0, sizeof(changes));
-        compare(changes);
-        //printf("%s \n", changes);
+        compare_local(changes, argv[1]);
+        printf("------------------\n%s \n", changes);
         printf("[!] ERROR: Cantidad de argumentos no valida! \n");
     }
 }
