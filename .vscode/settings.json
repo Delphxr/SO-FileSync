@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "typeinfo": "c",
+        "stdio.h": "c",
+        "stdint.h": "c",
+        "stat.h": "c",
+        "stdlib.h": "c"
+    }
+}

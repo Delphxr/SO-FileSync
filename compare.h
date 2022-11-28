@@ -1,28 +1,22 @@
 #include <dirent.h>
-#include <grp.h>
-#include <langinfo.h>
 #include <limits.h>  //For PATH_MAX
-#include <locale.h>
-#include <pwd.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <time.h>
+
 
 struct tm* tm;
 char datestring[256];
 
-struct list {
-};
 
 void print_data(int level, struct dirent* dp, char* out) {
     struct stat statbuf;
     struct passwd* pwd;
     struct group* grp;
     char str[256];
+    char date[64];
     // revisa la integridad del archivo y obtiene los stats
 
     // tamanno
@@ -30,15 +24,17 @@ void print_data(int level, struct dirent* dp, char* out) {
     sprintf(str, "%ld", statbuf.st_size);
 
     // fecha modificacion
-    tm = localtime(&statbuf.st_mtime);
-    strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
+    sprintf(date, "%ld", (intmax_t)statbuf.st_mtim.tv_sec);
 
     strcat(out, "/");
     strcat(out, dp->d_name);
     strcat(out, " ");
     // printf("/%s",dp->d_name);
     strcat(out, str);
+    strcat(out," ");
+    strcat(out,date);
     strcat(out, "\n");
+  
     // printf(" %s  \n",str);
     //  nombre
 }
@@ -100,8 +96,23 @@ void readFile(char* route, char* out) {
         fclose(filePointer);
     }
 }
+char * getname(char * node){
+    char* token;
+    char* rest = node;
+    int index = 0;
+    token = strtok_r(rest, " ", &rest); 
+    return node;
+}
+char * getsize(char * node){
+    char* token;
+    char* rest = node;
+    token = strtok_r(rest, " ", &rest);
+    //token = strtok_r(rest, " ", &rest);
+    strcpy(node,rest);
+    return rest;
+}
+int findNode(char* string, char* list,char * name,char *size,char * name2,char *size2) {
 
-void findNode(char* string, char* list) {
     char* token;
     char* rest = list;
     int find = 0;
@@ -109,66 +120,121 @@ void findNode(char* string, char* list) {
         if (strcmp(token, string) == 0) {
             find = 1;
             break;
+        }else{
+            strcpy(name,string);
+            strcpy(size,string);
+            strcpy(name2,token);
+            strcpy(size2,token);
+            getname(name);
+            getsize(size);
+            getname(name2);
+            getsize(size2);
+            if(strcmp(name,name2) == 0 ){
+                if(strcmp(size2,size) != 0)
+                    return 0;
+            }
+           
         }
     }
     if (find == 0)
-        printf("%s\n", string);
+    {
+        strcpy(name,string);
+        strcpy(size,string);
+        getname(name);
+        getsize(size);
+        return 1;
+    }
+    return 50;
+        
 }
 
-void compareByNOdes(char* data1, char* data2) {
+//type 0 Elimincion, 1 agregacion 
+void compareByNOdes(char* data1, char* data2,int type,char* changes) {
     // printf("Datos Existentes \n%s \n",data1);
     // printf("Datos Leidos \n%s ",data2);
     char buff[255];
     char buff1[2048];
+    
     // loop through the string to extract all other tokens
     char* token;
     char* rest = data1;
     while ((token = strtok_r(rest, "\n", &rest))) {
+        char name1 [1024]="";
+        char size1 [1024]="";
+        char name2 [1024]="";
+        char size2 [1024]="";
         strcpy(buff, token);
         strcpy(buff1, data2);
-        findNode(buff, buff1);
+        int estade = findNode(buff, buff1,name1,size1,name2,size2);
+        if(estade==0 && type ==1){
+            strcat(changes,"Modificado");
+            strcat(changes,name1);
+            strcat(changes," ");
+            strcat(changes,size1);
+            printf("Modificado %s %s\n",name1,size1);
+            
+        }
+        if(estade==1){
+            if(type==1){
+                strcat(changes,"Agregado");
+                strcat(changes,name1);
+                strcat(changes," ");
+                strcat(changes,size1);
+                printf("Agregado %s %s\n",name1,size1);
+            }
+               
+            else{
+                strcat(changes,"Eliminado");
+                strcat(changes,name1);
+                strcat(changes," ");
+                strcat(changes,size1);
+                printf("Eliminado %s %s\n",name1,size1);
+            }
+                
+        }
+       
+        
     }
 }
 
-void compare() {
+void compare(char * changes) {
     char* route = ".config";
     char grafo[2048];
-    memset(grafo, 0, sizeof(grafo));
+    char dataRead[2048];
+    
     FILE* filePointer;
     filePointer = fopen(route, "r");
     if (filePointer == NULL) {
+        memset(grafo, 0, sizeof(grafo));
         magic(0, ".", grafo);
         saveData(route, grafo);
     } else {
-        char dataRead[2048];
-        memset(dataRead, 0, sizeof(dataRead));
-        magic(0, ".", grafo);
-
-        readFile(".config", dataRead);
-        printf("\nArchivos Eliminados\n");
-        compareByNOdes(dataRead, grafo);
-
-        memset(dataRead, 0, sizeof(dataRead));
         memset(grafo, 0, sizeof(grafo));
-        readFile(".config", dataRead);
+        memset(dataRead, 0, sizeof(dataRead));
         magic(0, ".", grafo);
-        saveData(route, grafo);
-        printf("\nArchivos Nuevos\n");
-        compareByNOdes(grafo, dataRead);
+        readFile(".config", dataRead);
+       
+        compareByNOdes(dataRead, grafo,0,changes);
 
-  
+        memset(grafo, 0, sizeof(grafo));
+        memset(dataRead, 0, sizeof(dataRead));
+        magic(0, ".", grafo);
+        readFile(".config", dataRead);
+        
+        compareByNOdes(grafo,dataRead,1,changes);
     }
 }
-/*
+
 int main(int argc, char *argv[]) {
 
     // revisamos si hay mas de 1 argumentos, el argumento 0 es el nombre del programa
     if (argc >= 2) {
-        compare();
-
+        char changes[4096] ;
+        memset(changes, 0, sizeof(changes));
+        compare(changes);
+        
     } else
         printf("Se espera que haya al menos un argumento.\n");
 
     exit(0);
     }
-*/
